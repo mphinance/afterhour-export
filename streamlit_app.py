@@ -21,10 +21,22 @@ st.set_page_config(page_title="AfterHour Post Analyzer", page_icon="📊", layou
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_profile(username: str, _progress_cb=None) -> pd.DataFrame:
-    # Leading underscore keeps Streamlit from trying to hash the callback.
+def load_profile(username: str) -> pd.DataFrame:
+    # The progress widgets have to be created in here, not passed in. Streamlit
+    # replays the element calls a cached function made, and replaying a write to
+    # a placeholder created outside the function is an error on every cache hit.
+    # Both are cleared before returning, so a replay draws nothing.
+    status = st.empty()
+    bar = st.empty()
+
+    def progress(n: int, total: int) -> None:
+        status.write(f"Fetching posts... {n}/{total}")
+        bar.progress(min(n / total, 1.0) if total else 0.0)
+
     author_id = profile_id(username)
-    raw = fetch_all_posts(author_id, progress_cb=_progress_cb)
+    raw = fetch_all_posts(author_id, progress_cb=progress)
+    status.empty()
+    bar.empty()
     rows = [normalize(item) for item in raw]
     df = pd.DataFrame(rows)
     if not df.empty:
@@ -62,22 +74,13 @@ target = username.strip() if submitted else st.session_state.get("last_username"
 if submitted:
     st.session_state["last_username"] = target
 
-status = st.empty()
-bar = st.empty()
-
-def _progress(n, total):
-    status.write(f"Fetching posts... {n}/{total}")
-    bar.progress(min(n / total, 1.0) if total else 0.0)
-
 try:
     with st.spinner(f"Looking up @{target}..."):
-        df = load_profile(target, _progress_cb=_progress)
+        df = load_profile(target)
 except LookupError as e:
     st.error(f"✗ {e}")
     st.stop()
 except urllib.error.HTTPError as e:
-    status.empty()
-    bar.empty()
     if e.code >= 500:
         st.error(
             f"✗ AfterHour's API is timing out on us (HTTP {e.code}: {e.reason}). That's "
@@ -88,13 +91,8 @@ except urllib.error.HTTPError as e:
         st.error(f"✗ AfterHour's API returned HTTP {e.code}: {e.reason}")
     st.stop()
 except Exception as e:
-    status.empty()
-    bar.empty()
     st.error(f"✗ Something went wrong talking to AfterHour: {e}")
     st.stop()
-
-status.empty()
-bar.empty()
 
 if df.empty:
     st.warning(f"@{target} has no public posts.")

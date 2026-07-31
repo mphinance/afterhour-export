@@ -5,6 +5,8 @@
 Type in an AfterHour username, get their whole post history back as charts and a
 downloadable CSV. No login, no API key — AfterHour's post feed is public.
 
+![The app's landing page](docs/screenshots/01-landing.png)
+
 **Live app:** deploy this repo on [Streamlit Community Cloud](https://streamlit.io/cloud)
 pointed at `streamlit_app.py`, or run it yourself:
 
@@ -15,13 +17,35 @@ streamlit run streamlit_app.py
 
 ## What it shows
 
-- Posting activity over time, plus a day/hour heatmap of when they actually post
-- Tag breakdown (Gain/Loss/Discuss/DD/etc. — self-selected by the poster, not verified)
-- Most-mentioned tickers
-- Portfolio value over time (**flagged as unreliable** — AfterHour's brokerage sync has
-  been known to glitch; see the warning in the app itself)
-- How many posts mention a paid product/Discord/Substack/etc.
-- Full raw data table + CSV export
+Every screenshot below is a real run against `@mphinance`'s public profile — 1,171
+posts going back to December 2024.
+
+Headline numbers first: how much they post, how much engagement it draws, how often
+they tag their own posts as wins versus losses, and how much of it points at
+something paid.
+
+![Summary metrics for a profile](docs/screenshots/02-overview.png)
+
+Posting activity over time, plus a day/hour heatmap of when they actually post:
+
+![Weekly posting volume and a day-by-hour heatmap](docs/screenshots/03-activity.png)
+
+Most-mentioned tickers:
+
+![Bar chart of the twenty most-mentioned tickers](docs/screenshots/04-tickers.png)
+
+Portfolio value over time — **flagged as unreliable** right in the app, because
+AfterHour's brokerage sync has been known to glitch. It's also a *total account
+value*, not a profit number:
+
+![Portfolio value over time, with a warning about its reliability](docs/screenshots/05-portfolio.png)
+
+And the full table behind all of it, with a CSV export of every field:
+
+![The raw data table with a download button](docs/screenshots/06-data.png)
+
+There's also a Tags tab breaking down Gain/Loss/Discuss/DD/etc. — self-selected by
+the poster, not verified by anyone.
 
 ## Just want the data, not the dashboard?
 
