@@ -9,3 +9,6 @@ select = ["E", "F", "W", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Put the repo root on sys.path so `pytest` finds afterhour.py. Bare `pytest`
+# doesn't add the working directory the way `python -m pytest` does.
+pythonpath = ["."]
