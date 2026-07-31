@@ -1,0 +1,14 @@
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+# Pyflakes, pycodestyle, import sorting, bugbear, and pyupgrade. Pinned explicitly
+# so a new ruff release doesn't turn CI red on rules we never opted into.
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Put the repo root on sys.path so `pytest` finds afterhour.py. Bare `pytest`
+# doesn't add the working directory the way `python -m pytest` does.
+pythonpath = ["."]
