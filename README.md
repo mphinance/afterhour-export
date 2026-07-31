@@ -35,8 +35,17 @@ python3 fetch_my_afterhour_posts.py --username YourHandle
 `afterhour.com/<username>`'s post feed is powered by a public, unauthenticated API:
 
 ```
-https://api.afterhour.com/social/feed?take=100&contentTypes=post&authorId=<prf_id>
+https://api.afterhour.com/social/feed?take=50&contentTypes=post&authorId=<prf_id>
 ```
 
-`take` is capped at 100 per request — page through with the response's `cursor` field
-to get everything. This app and the standalone script both handle that automatically.
+Page through with the response's `cursor` field to get everything. The app handles
+that automatically, along with two quirks worth knowing about:
+
+- **`take` is capped at 100, but 100 doesn't actually work.** The first page returns
+  fine; every *cursor* page after it hits a 504 Gateway Timeout essentially every
+  time. 50 is the largest page size that paginates reliably.
+- **504s happen intermittently even at 50** — roughly one request in seven. They're
+  transient, so the app retries the same cursor with exponential backoff, and falls
+  back to a smaller page size if a page still won't load. The cursor is independent
+  of `take`, so shrinking mid-run resumes at exactly the right spot with no gaps or
+  duplicates.

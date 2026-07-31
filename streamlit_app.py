@@ -23,6 +23,12 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
 API_BASE = "https://api.afterhour.com/social/feed"
 
+# The API accepts take=100, but anything past the first page at that size makes its
+# gateway give up with a 504 essentially every time. 50 is the largest size that
+# paginates reliably; smaller sizes are the fallback when even that times out.
+PAGE_SIZE = 50
+MIN_PAGE_SIZE = 10
+
 FUNNEL_KEYWORDS = re.compile(
     r"\b(discord|substack|coaching|mentorship|whop|patreon|paid tier|paid group|"
     r"paid community|subscription|discount code|promo code|referral|coupon|"
@@ -36,11 +42,14 @@ st.set_page_config(page_title="AfterHour Post Analyzer", page_icon="📊", layou
 # live progress bar instead of print statements.
 # --------------------------------------------------------------------------
 
-def _get(url: str, retries: int = 3):
+def _get(url: str, retries: int = 6, timeout: int = 60):
+    """AfterHour's gateway throws intermittent 504s under load — roughly one request
+    in seven, even at a page size it can otherwise handle. They clear on their own,
+    so back off and retry rather than failing the whole run."""
     for attempt in range(retries):
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         try:
-            with urllib.request.urlopen(req, timeout=20) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
                 body = r.read().decode("utf-8", "replace")
                 ct = r.headers.get("content-type", "")
             return json.loads(body) if ct.startswith("application/json") else body
@@ -50,7 +59,7 @@ def _get(url: str, retries: int = 3):
         except (urllib.error.URLError, TimeoutError):
             if attempt == retries - 1:
                 raise
-        time.sleep(1.5 * (attempt + 1))
+        time.sleep(min(1.5 * (2 ** attempt), 12))
 
 
 def profile_id(username: str) -> str:
@@ -79,15 +88,31 @@ def profile_id(username: str) -> str:
 
 
 def fetch_all_posts(author_id: str, progress_cb=None) -> list[dict]:
-    """take is capped at 100 server-side; page through with `cursor` until done."""
+    """Page through the feed with `cursor` until we've seen every post.
+
+    The cursor is independent of `take`, so if a page keeps timing out we can retry
+    the very same cursor at a smaller size and pick up exactly where we left off.
+    """
     posts: list[dict] = []
     cursor = None
     total = None
+    take = PAGE_SIZE
+
     while True:
-        url = f"{API_BASE}?take=100&contentTypes=post&authorId={author_id}"
+        url = f"{API_BASE}?take={take}&contentTypes=post&authorId={author_id}"
         if cursor is not None:
             url += f"&cursor={cursor}"
-        page = _get(url)
+
+        try:
+            page = _get(url)
+        except urllib.error.HTTPError as e:
+            # Still timing out after all the retries — shrink the page and try the
+            # same cursor again. Only give up once we're already as small as we go.
+            if e.code >= 500 and take > MIN_PAGE_SIZE:
+                take = max(take // 2, MIN_PAGE_SIZE)
+                continue
+            raise
+
         if total is None:
             total = page.get("totalCount", 0)
         batch = page.get("items", [])
@@ -146,9 +171,10 @@ def normalize(item: dict) -> dict:
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_profile(username: str) -> pd.DataFrame:
+def load_profile(username: str, _progress_cb=None) -> pd.DataFrame:
+    # Leading underscore keeps Streamlit from trying to hash the callback.
     author_id = profile_id(username)
-    raw = fetch_all_posts(author_id)
+    raw = fetch_all_posts(author_id, progress_cb=_progress_cb)
     rows = [normalize(item) for item in raw]
     df = pd.DataFrame(rows)
     if not df.empty:
@@ -195,11 +221,25 @@ def _progress(n, total):
 
 try:
     with st.spinner(f"Looking up @{target}..."):
-        df = load_profile(target)
+        df = load_profile(target, _progress_cb=_progress)
 except LookupError as e:
     st.error(f"✗ {e}")
     st.stop()
+except urllib.error.HTTPError as e:
+    status.empty()
+    bar.empty()
+    if e.code >= 500:
+        st.error(
+            f"✗ AfterHour's API is timing out on us (HTTP {e.code}: {e.reason}). That's "
+            f"on their end, not yours, and it's usually brief — give it a minute and "
+            f"hit Analyze again."
+        )
+    else:
+        st.error(f"✗ AfterHour's API returned HTTP {e.code}: {e.reason}")
+    st.stop()
 except Exception as e:
+    status.empty()
+    bar.empty()
     st.error(f"✗ Something went wrong talking to AfterHour: {e}")
     st.stop()
 
