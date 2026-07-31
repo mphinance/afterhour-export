@@ -1,5 +1,7 @@
 # AfterHour Post Analyzer
 
+[![CI](https://github.com/mphinance/afterhour-export/actions/workflows/ci.yml/badge.svg)](https://github.com/mphinance/afterhour-export/actions/workflows/ci.yml)
+
 Type in an AfterHour username, get their whole post history back as charts and a
 downloadable CSV. No login, no API key — AfterHour's post feed is public.
 
@@ -29,6 +31,23 @@ https://gist.github.com/mphinance/8be410783fe65efe3894198f88388d2a
 ```bash
 python3 fetch_my_afterhour_posts.py --username YourHandle
 ```
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+pytest          # unit tests — no network, the feed API is stubbed
+ruff check .    # lint
+```
+
+- `afterhour.py` — the feed client: fetching, cursor pagination, normalization.
+- `streamlit_app.py` — the UI, charts, and CSV export.
+
+They're split so the client can be imported and tested on its own; importing the
+app module would otherwise boot the whole Streamlit page.
+
+CI runs the tests and lint on Python 3.10–3.13, plus a smoke check that the app
+actually boots. Nothing in CI touches the network.
 
 ## How the data source works
 
